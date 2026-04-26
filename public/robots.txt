@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://pehchaanteeproduction.netlify.app/sitemap.xml
