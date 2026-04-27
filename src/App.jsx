@@ -37,7 +37,27 @@ export default function App() {
       }
     })
 
-    return () => subscription.unsubscribe()
+    // Global redirect for old hash links
+    // 1. Aggressive Hash Cleanup for legacy links
+    const handleHash = () => {
+      const hash = window.location.hash
+      if (hash === '#leaderboard' || hash.includes('leaderboard')) {
+        // Clear the hash and move to the clean route
+        window.history.replaceState(null, '', '/leaderboard')
+        window.location.reload() // Force reload to clear any cache/state
+      } else if (hash && !hash.includes('access_token')) {
+        // Clear any other non-auth hashes
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      }
+    }
+    
+    window.addEventListener('hashchange', handleHash)
+    handleHash() // Initial check
+
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('hashchange', handleHash)
+    }
   }, [])
 
   return (
