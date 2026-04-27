@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import Avatar from '../components/Avatar'
 import { useNavigate } from 'react-router-dom'
 import { 
   Zap, LayoutDashboard, Signal, Globe, User, Save, Check, Plus, X,
@@ -175,7 +176,7 @@ const PERSONAS = {
   }
 }
 
-const VerificationLock = ({ profile }) => (
+const VerificationLock = ({ profile, user }) => (
   <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
     <div className="card p-10 max-w-md w-full glass shadow-2xl relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-1" style={{ background: 'linear-gradient(90deg, var(--sf), var(--gold))' }} />
@@ -188,7 +189,7 @@ const VerificationLock = ({ profile }) => (
       </p>
       <div className="space-y-4">
         <a
-          href={`https://wa.me/917981325397?text=${encodeURIComponent(`Hi KnoWMi! I'm ${profile?.first_name}. I've signed up and would like to verify my account.\nEmail: ${profile?.user_id}`)}`}
+          href={`https://wa.me/917981325397?text=${encodeURIComponent(`Hi KnoWMi! I'm ${profile?.first_name}. I've signed up and would like to verify my account.\nEmail: ${user?.email}`)}`}
           target="_blank"
           rel="noopener noreferrer"
           className="w-full btn-primary py-4 flex items-center justify-center gap-3 shadow-xl"
@@ -453,7 +454,7 @@ const PersonaEditor = ({ profile, onUpdate }) => {
             >
               <div className={`absolute top-0 left-0 w-1.5 h-full ${idnt.active ? 'bg-orange-500' : 'bg-neutral-200'}`} />
               <div className="w-16 h-16 rounded-2xl overflow-hidden bg-neutral-100 shrink-0">
-                 {profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl">{PERSONAS[idnt.persona_type]?.emoji || '👤'}</div>}
+              <Avatar src={profile?.avatar_url} name={`${idnt.first_name} ${idnt.last_name}`} username={profile?.username} size="w-16 h-16 text-2xl" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -539,7 +540,7 @@ const PersonaEditor = ({ profile, onUpdate }) => {
               <div className="flex items-center gap-6 p-4 bg-neutral-50 rounded-2xl">
                 <div className="relative">
                   <div className="w-20 h-20 rounded-2xl overflow-hidden bg-neutral-100 flex items-center justify-center text-4xl shadow-lg border-4 border-white">
-                    {profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" /> : theme.emoji}
+                    <Avatar src={profile?.avatar_url} name={`${firstName} ${lastName}`} username={profile?.username} size="w-20 h-20 text-4xl" />
                   </div>
                   <label className="absolute -bottom-2 -right-2 w-8 h-8 bg-orange-500 rounded-full border-4 border-white flex items-center justify-center text-white cursor-pointer shadow-lg hover:scale-110 transition-all"><Plus size={16}/><input type="file" className="hidden" onChange={(e) => handleAvatarUpload(e.target.files[0])}/></label>
                 </div>
@@ -638,7 +639,7 @@ const PersonaEditor = ({ profile, onUpdate }) => {
                 className="w-24 h-24 rounded-[32px] mx-auto mb-6 flex items-center justify-center text-5xl shadow-2xl"
                 style={{ background: theme.cardBg, border: `2.5px solid ${theme.accentLight}` }}
               >
-                {profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" /> : theme.emoji}
+                <Avatar src={profile?.avatar_url} name={`${firstName} ${lastName}`} username={profile?.username} size="w-24 h-24 text-4xl" />
               </div>
               <h3 className="text-2xl font-display font-black text-center mb-1" style={{ color: theme.textPrimary }}>{firstName} {lastName || ''}</h3>
               <p className="text-[10px] font-bold text-center uppercase tracking-[0.2em] mb-4" style={{ color: theme.accent }}>{data.tagline || `${theme.label} Identity`}</p>
@@ -696,8 +697,8 @@ const PersonaEditor = ({ profile, onUpdate }) => {
 const IdentityPass = ({ profile }) => {
   const isOwner = profile?.role === 'owner';
   const isPaid = profile?.status === 'paid' || isOwner
-  const secretSlug = profile?.persona_data?.public_slug || profile?.id
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${window.location.origin}/p/${secretSlug}`
+  const secretSlug = profile?.secure_slug || profile?.id
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`${window.location.origin}/p/${secretSlug}`)}`
 
   return (
     <div className="animate-slideUp space-y-8">
@@ -795,16 +796,23 @@ const IdentityPass = ({ profile }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { profile, loading: authLoading, refreshProfile, isVerified, role } = useAuth()
+  const { profile, user, loading: authLoading, refreshProfile, isVerified, role } = useAuth()
   const [scans, setScans] = useState([])
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('analytics')
+  
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/?auth=signin')
+    }
+  }, [user, authLoading, navigate])
   const [editorProgress, setEditorProgress] = useState(null)
   const [isNavVisible, setIsNavVisible] = useState(true)
   const [dailyStats, setDailyStats] = useState([])
   const [recentEvents, setRecentEvents] = useState([])
   const [analyticsSummary, setAnalyticsSummary] = useState({ total: 0, unique: 0, qr: 0, repeat: 0 })
+  const [selectedSize, setSelectedSize] = useState('L')
   const idleTimer = useRef(null)
 
   useEffect(() => {
@@ -835,11 +843,7 @@ export default function Dashboard() {
     }
   }, [])
 
-  const [connections, setConnections] = useState([
-    { id: 1, name: 'Arjun Mehta', code: 'WM-ARJ-021', date: '2 hours ago', avatar: 'https://i.pravatar.cc/150?u=1' },
-    { id: 2, name: 'Sanya Iyer', code: 'WM-SAN-009', date: 'Yesterday', avatar: 'https://i.pravatar.cc/150?u=2' },
-    { id: 3, name: 'Rohan Das', code: 'WM-ROH-044', date: '3 days ago', avatar: 'https://i.pravatar.cc/150?u=3' }
-  ])
+  const [connections, setConnections] = useState([])
 
   useEffect(() => { 
     if (profile?.id) {
@@ -894,7 +898,7 @@ export default function Dashboard() {
     })
   }, [scans])
 
-  console.log("DEBUG: Verification Status for", profile?.first_name, "is", isVerified);
+
 
   // REAL DATA CALCULATIONS
   const totalScans = (scans || []).length
@@ -908,66 +912,79 @@ export default function Dashboard() {
 
   // ABSOLUTE GATE: If not verified AND not owner, they see NOTHING but the lock.
   if (isVerified !== true && role !== 'owner') return (
-    <div className="min-h-screen bg-[#FAFAF9] pb-32">
+    <div className="min-h-screen bg-[#FAFAF9]">
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       <header className="h-16 border-b bg-white/80 backdrop-blur-xl flex items-center px-6 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto w-full flex justify-between items-center">
-          <div className="flex items-center gap-3">
-             <a href="/" className="text-xs font-bold text-neutral-400 hover:text-neutral-900 transition-colors">← Back to Home</a>
-          </div>
+          <button onClick={() => navigate('/')} className="text-xs font-bold text-neutral-400 hover:text-neutral-900 transition-colors flex items-center gap-2">
+            <ArrowLeft size={16} /> Back to Home
+          </button>
         </div>
       </header>
-      <VerificationLock profile={profile} />
+      <VerificationLock profile={profile} user={user} />
     </div>
   )
 
   return (
     <div className="min-h-screen bg-[#FAFAF9] pb-32">
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
-      <header className="h-20 bg-white border-b border-neutral-200 flex items-center px-8 sticky top-0 z-50">
+      
+      {/* Personalized Navigation */}
+      <header className="h-20 bg-white/80 backdrop-blur-md border-b border-neutral-100 flex items-center px-4 md:px-8 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
-          <div className="flex flex-col">
-            <h1 className="font-display text-2xl tracking-tight text-[#111111]">KnoWMi <span className="text-neutral-300 font-light text-xl">| Analytics</span></h1>
-            <p className="text-[10px] font-bold text-orange-500 uppercase tracking-[0.2em] leading-none mt-1">Scan Me. Know Me.</p>
-          </div>
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-               <div className="w-10 h-10 rounded-full bg-neutral-200 flex items-center justify-center">
-                 <User size={20} className="text-neutral-500" />
-               </div>
-               <div className="flex flex-col">
-                 <span className="text-[11px] font-bold text-neutral-900 leading-none">{profile?.first_name}</span>
-                 <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider">{String(profile?.wm_code || '').replace('PT-', 'WM-')}</span>
-               </div>
+            <button 
+              onClick={() => navigate('/')}
+              className="p-2 hover:bg-neutral-100 rounded-xl text-neutral-400 transition-colors flex items-center gap-2 group"
+            >
+              <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+              <span className="text-xs font-bold uppercase tracking-widest hidden sm:inline">Home</span>
+            </button>
+            <div className="h-8 w-px bg-neutral-100 hidden sm:block" />
+            <div className="flex flex-col">
+              <h1 className="font-display text-2xl tracking-tight text-[#111111]">
+                {profile?.first_name ? `${profile.first_name}'s` : 'KnoWMi'} <span className="text-neutral-300 font-light text-xl">| Analytics</span>
+              </h1>
+              <p className="text-[10px] font-bold text-orange-500 uppercase tracking-[0.2em] leading-none mt-1">Scan Me. Know Me.</p>
             </div>
-            <div className="flex items-center gap-1">
-              <button className="w-8 h-8 rounded-lg hover:bg-neutral-100 flex items-center justify-center text-neutral-400"><Settings size={18}/></button>
-              <button className="w-8 h-8 rounded-lg hover:bg-neutral-100 flex items-center justify-center text-neutral-400"><Bell size={18}/></button>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div 
+              onClick={() => navigate(`/p/${profile?.secure_slug || profile?.id}`)}
+              className="flex items-center gap-3 pl-3 pr-1 py-1 rounded-2xl bg-neutral-50 border border-neutral-100 hover:border-orange-200 transition-all cursor-pointer group"
+            >
+              <div className="text-right hidden sm:block">
+                <p className="text-xs font-black text-neutral-900 leading-none">{profile?.first_name}</p>
+                <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1">{profile?.wm_code || 'WM-NEW-000'}</p>
+              </div>
+              <Avatar 
+                src={profile?.avatar_url} 
+                name={profile?.first_name} 
+                username={profile?.username} 
+                size="w-9 h-9 border-2 border-white shadow-sm group-hover:border-orange-500/20 transition-all" 
+              />
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-8 pt-8">
-        {/* Top Control Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8 bg-white p-2 rounded-2xl border border-neutral-200 shadow-sm">
-          <div className="flex-1 flex items-center px-4 gap-3 bg-[#F1F3F4] rounded-xl border border-neutral-100">
-            <span className="w-4 h-4 bg-[#0D9488] rounded-full"></span>
-            <input type="text" placeholder="Filter by Campaign or Product..." className="bg-transparent border-none outline-none py-3 text-sm font-medium w-full text-neutral-600" />
-            <span className="text-neutral-400">×</span>
+      <main className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12">
+        <div className="animate-slideUp space-y-8">
+          {/* Controls - Period Selection Only */}
+          <div className="flex justify-end items-center mb-8">
+            <div className="bg-white p-1 rounded-2xl border border-neutral-100 shadow-sm flex items-center gap-2">
+              <Clock size={16} className="text-neutral-400 ml-3" />
+              <button className="px-6 py-2.5 rounded-xl bg-[#111111] text-white text-xs font-bold shadow-lg shadow-black/10 flex items-center gap-2 transition-all hover:scale-[1.02]">
+                Last 30 Days <ChevronDown size={14}/>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 px-4 py-3 bg-[#F1F3F4] rounded-xl border border-neutral-100 cursor-pointer min-w-[180px]">
-            <Clock size={16} className="text-neutral-500" />
-            <span className="text-sm font-bold text-neutral-700 flex-1">Last 30 Days</span>
-            <ChevronRight size={14} className="rotate-90 text-neutral-400" />
-          </div>
-        </div>
 
-        <div className="tab-container relative overflow-hidden min-h-[800px]">
-          {/* Analytics Tab */}
-          <div className={`tab-transition ${activeTab === 'analytics' ? 'tab-visible' : 'tab-hidden'}`}>
-            {activeTab === 'analytics' && (
-              <div className="space-y-8 animate-slideUp">
+          <div className="tab-container relative overflow-hidden min-h-[800px]">
+            {/* Analytics Tab */}
+            <div className={`tab-transition ${activeTab === 'analytics' ? 'tab-visible' : 'tab-hidden'}`}>
+              <div className="space-y-8">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-white p-6 rounded-[1.5rem] border border-neutral-200 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">Total Views</p>
@@ -1180,7 +1197,7 @@ export default function Dashboard() {
                           {/* Integrated Identity Overlay */}
                           <div className={`absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 bg-white rounded-3xl p-3 shadow-2xl flex flex-col items-center justify-center border-4 border-black/5 rotate-[-1deg] overflow-hidden ${profile?.status !== 'paid' ? 'premium-shimmer' : ''}`}>
                             <img 
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${window.location.origin}/p/${profile?.persona_data?.public_slug || profile?.id}`} 
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${window.location.origin}/p/${profile?.secure_slug || profile?.id}`} 
                               className={`w-full h-full mb-1 opacity-80 ${profile?.status !== 'paid' ? 'blur-[8px] grayscale opacity-40' : ''}`} 
                             />
                             {profile?.status !== 'paid' && (
@@ -1210,9 +1227,14 @@ export default function Dashboard() {
                           <div className="space-y-4">
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Select Fit (240 GSM)</p>
                             <div className="grid grid-cols-4 gap-3">
-                              {['S', 'M', 'L', 'XL'].map(size => (
-                                <button key={size} className="h-12 border-2 border-neutral-100 rounded-xl flex items-center justify-center font-black text-sm hover:border-orange-500 hover:text-orange-600 transition-all">
-                                  {size}
+                              {['S', 'M', 'L', 'XL'].map(sz => (
+                                <button 
+                                  key={sz} 
+                                  onClick={() => setSelectedSize(sz)}
+                                  className={`h-12 border-2 rounded-xl flex items-center justify-center font-black text-sm transition-all
+                                    ${selectedSize === sz ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-neutral-100 hover:border-orange-200'}`}
+                                >
+                                  {sz}
                                 </button>
                               ))}
                             </div>
@@ -1223,11 +1245,14 @@ export default function Dashboard() {
                               const { error } = await supabase.from('orders').insert({
                                 profile_id: profile.id,
                                 item_name: 'Signature KnoWMi',
-                                size: 'L',
+                                size: selectedSize,
                                 amount: 999,
-                                qr_code_link: window.location.origin + '/p/' + (profile?.persona_data?.public_slug || profile?.id)
+                                qr_code_link: window.location.origin + '/s/' + (profile?.wm_code?.replace('PT-', '') || profile?.id)
                               })
-                              if (!error) alert('Order Initiated! Our team will contact you for shipping details.')
+                              if (!error) {
+                                alert('Order Initiated! Our team will contact you for shipping details.')
+                                refreshProfile()
+                              }
                             }}
                             className="btn-primary w-full h-16 rounded-[24px] text-base font-black flex items-center justify-center gap-3 mt-8 shadow-xl shadow-orange-500/20 active:scale-95 transition-all"
                           >
